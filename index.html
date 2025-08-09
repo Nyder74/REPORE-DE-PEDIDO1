@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reporte de Tarimas Mejorado</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f8; }
+  h1 { text-align: center; color: #0b3d91; font-size: 28px; }
+  .formulario { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+  select, input[type="number"], input[type="text"], input[type="file"] {
+    padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 18px;
+  }
+  button {
+    padding: 10px 15px; border: none; border-radius: 5px; background: #2ecc71; color: white;
+    cursor: pointer; font-size: 18px; margin: 5px;
+  }
+  button:hover { background: #27ae60; }
+  button.delete-btn {
+    background: #e74c3c; margin-left: 5px;
+  }
+  button.delete-btn:hover {
+    background: #c0392b;
+  }
+  video { width: 100%; max-width: 350px; border: 2px solid #0074d9; border-radius: 8px; display: block; margin: 0 auto 10px; }
+  #canvas { display: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 18px; }
+  th, td { padding: 10px; border: 1px solid #ddd; text-align: center; vertical-align: middle; }
+  th { background: #0074d9; color: white; }
+  img { width: 80px; height: 80px; object-fit: cover; margin: 2px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>📦 Reporte de Tarimas Mejorado</h1>
+<p style="text-align:center; font-size: 20px;">Fecha: <span id="fecha"></span></p>
+
+<div class="formulario">
+  <select id="agencia" onchange="mostrarCita()">
+    <option value="">Selecciona Agencia</option>
+    <option>QUICHE</option><option>JUTIAPA</option><option>ESCUINTLA</option><option>ENCUENTROS</option>
+    <option>CUYO</option><option>PROGRESO</option><option>ZACAPA</option><option>COATEPEQUE</option>
+    <option>COBAN</option><option>CHIQUIMULA</option><option>ATANASIO</option><option>VILLANUEVA</option>
+    <option>WALMART</option><option>SUPER DEL BARRIO</option><option>DOLLAR CITY</option><option>PRICESMART</option>
+    <option>COCALES</option><option>XELA</option><option>STA IRENE</option><option>POPTUN</option>
+    <option>SALAMA</option><option>JALAPA</option><option>MORALES</option><option>HUEHUE</option>
+    <option>ESQUIPULAS</option><option>PUERTOS BARI</option><option>SAN BENITO</option><option>BARBERENA</option>
+  </select>
+  <input type="number" id="tarimas" min="0" placeholder="Cantidad" />
+  <input type="text" id="cita" placeholder="Número de Cita" style="display:none;" />
+  <input type="file" id="fotos" accept="image/*" multiple />
+</div>
+
+<div style="text-align:center;">
+  <video id="video" autoplay></video>
+  <button onclick="tomarFoto()">📸 Tomar Foto</button>
+  <canvas id="canvas"></canvas>
+</div>
+
+<table id="tabla" style="margin-top:20px;">
+  <thead>
+    <tr>
+      <th>Agencia</th>
+      <th>Tarimas</th>
+      <th>Cita</th>
+      <th>Fotos (Previsualización)</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div style="text-align:center; margin-top:20px;">
+  <button onclick="agregarRegistro()">➕ Agregar Registro</button>
+  <button onclick="generarPDF()">📄 Generar PDF</button>
+  <button onclick="generarExcel()">📊 Generar Excel</button>
+  <button onclick="borrarTodos()">🗑️ Borrar Todos</button>
+</div>
+
+<script>
+  document.getElementById("fecha").textContent = new Date().toLocaleDateString("es-ES");
+  let registros = [];
+  let fotosTomadas = [];
+
+  function mostrarCita() {
+    let agencia = document.getElementById("agencia").value;
+    let citaInput = document.getElementById("cita");
+    if (agencia === "WALMART") {
+      citaInput.style.display = "inline-block";
+    } else {
+      citaInput.style.display = "none";
+      citaInput.value = "";
+    }
+  }
+
+  async function iniciarCamara() {
+    try {
+      const constraints = { video: { facingMode: { exact: "environment" } } };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      document.getElementById("video").srcObject = stream;
+    } catch (error) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById("video").srcObject = stream;
+      } catch (error2) {
+        alert("No se pudo acceder a la cámara: " + error2);
+      }
+    }
+  }
+
+  iniciarCamara();
+
+  function tomarFoto() {
+    let video = document.getElementById("video");
+    let canvas = document.getElementById("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    let ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    let fotoURL = canvas.toDataURL("image/png");
+    fotosTomadas.push(fotoURL);
+    // Ya no aparece alerta para no interrumpir
+  }
+
+  function agregarRegistro() {
+    let agencia = document.getElementById("agencia").value;
+    let tarimas = document.getElementById("tarimas").value;
+    let cita = document.getElementById("cita").value;
+    let fotosArchivos = document.getElementById("fotos").files;
+
+    if (!agencia || tarimas === "") {
+      alert("Completa la agencia y la cantidad");
+      return;
+    }
+    if (agencia === "WALMART" && !cita) {
+      alert("Debes ingresar la cita para Walmart");
+      return;
+    }
+
+    let fotosArray = [...fotosTomadas];
+    for (let foto of fotosArchivos) {
+      fotosArray.push(URL.createObjectURL(foto));
+    }
+
+    if (fotosArray.length === 0) {
+      alert("Debes tomar o subir al menos una foto");
+      return;
+    }
+
+    registros.push({ agencia, tarimas, cita, fotos: fotosArray });
+    fotosTomadas = [];
+    document.getElementById("tarimas").value = "";
+    document.getElementById("fotos").value = "";
+    document.getElementById("cita").value = "";
+    mostrarTabla();
+  }
+
+  function mostrarTabla() {
+    let tbody = document.querySelector("#tabla tbody");
+    tbody.innerHTML = "";
+    registros.forEach((reg, index) => {
+      let tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${reg.agencia}</td>
+        <td>${reg.tarimas}</td>
+        <td>${reg.cita || ""}</td>
+        <td>${reg.fotos.map(f => `<img src="${f}" style="width:80px;height:80px;object-fit:cover;margin:2px;border-radius:4px;">`).join('')}</td>
+        <td><button class="delete-btn" onclick="borrarRegistro(${index})">🗑️ Borrar</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function borrarRegistro(index) {
+    if(confirm("¿Seguro quieres borrar este registro?")) {
+      registros.splice(index, 1);
+      mostrarTabla();
+    }
+  }
+
+  function borrarTodos() {
+    if(confirm("¿Seguro quieres borrar todos los registros?")) {
+      registros = [];
+      mostrarTabla();
+    }
+  }
+
+  async function generarPDF() {
+    const { jsPDF } = window.jspdf;
+    let pdf = new jsPDF("p", "mm", "a4");
+    let margen = 15;
+    let anchoMaximo = pdf.internal.pageSize.getWidth() - margen * 2;
+    let altoMaximo = pdf.internal.pageSize.getHeight() - margen * 2 - 40; // espacio para texto
+
+    registros.forEach((reg, idx) => {
+      if(idx > 0) pdf.addPage();
+
+      pdf.setFontSize(20);
+      pdf.text(`Agencia: ${reg.agencia}`, margen, 25);
+      pdf.text(`Tarimas: ${reg.tarimas}`, margen, 35);
+      if (reg.cita) pdf.text(`Cita: ${reg.cita}`, margen, 45);
+
+      let x = margen;
+      let y = 55;
+      let fotoAncho = 100;
+      let fotoAlto = 80;
+
+      reg.fotos.forEach((foto, i) => {
+        // Dibuja cada foto en la misma página, una debajo de otra con margen
+        if (i > 0) y += fotoAlto + 10;
+        // Si no cabe en la página, crea nueva página (por si hay muchas fotos)
+        if(y + fotoAlto > pdf.internal.pageSize.getHeight() - margen) {
+          pdf.addPage();
+          y = margen;
+        }
+        pdf.addImage(foto, "PNG", x, y, fotoAncho, fotoAlto);
+      });
+    });
+
+    let nombreArchivo = registros.length > 0 ? `Reporte_Tarimas_${registros[0].agencia}_${new Date().toLocaleDateString("es-ES")}.pdf` : 
+    `Reporte_Tarimas_${new Date().toLocaleDateString("es-ES")}.pdf`;
+    pdf.save(nombreArchivo);
+  }
+
+  function generarExcel() {
+    let ws_data = [["Agencia", "Tarimas", "Cita", "Fotos (URL)"]];
+    registros.forEach(reg => {
+      ws_data.push([
+        reg.agencia,
+        reg.tarimas,
+        reg.cita || "",
+        reg.fotos.join(" | ")
+      ]);
+    });
+    let wb = XLSX.utils.book_new();
+    let ws = XLSX.utils.aoa_to_sheet(ws_data);
+    ws['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 20 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte");
+    XLSX.writeFile(wb, `Reporte_Tarimas_${new Date().toLocaleDateString("es-ES")}.xlsx`);
+  }
+</script>
+
+</body>
+</html>
